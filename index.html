@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Global</title>
+    <style>
+        /* CSS untuk tampilan chat yang modern dan responsif */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #e5e5e5; margin: 0; padding: 0; }
+        #chat-container { max-width: 800px; margin: 20px auto; background: #fff; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); display: flex; flex-direction: column; height: 90vh; }
+        #messages { flex-grow: 1; overflow-y: auto; padding: 20px; }
+        .message-item { margin-bottom: 15px; display: flex; flex-direction: column; }
+        .message-bubble { padding: 10px 15px; border-radius: 20px; max-width: 70%; word-wrap: break-word; }
+        .message-bubble.sent { background-color: #007bff; color: #fff; align-self: flex-end; }
+        .message-bubble.received { background-color: #f1f0f0; color: #000; align-self: flex-start; }
+        .message-info { font-size: 0.8em; color: #999; margin-top: 5px; }
+        .reply-preview { font-size: 0.8em; background: #e0e0e0; border-left: 3px solid #007bff; padding: 5px; margin-bottom: 5px; border-radius: 5px; }
+        img.chat-image { max-width: 100%; border-radius: 8px; margin-top: 5px; }
+        #form { display: flex; padding: 10px; border-top: 1px solid #ddd; }
+        #input-message { flex-grow: 1; padding: 10px 15px; border-radius: 20px; border: 1px solid #ccc; outline: none; }
+        #send-btn, #image-upload-btn { margin-left: 10px; padding: 10px 15px; border-radius: 20px; border: none; cursor: pointer; }
+        #send-btn { background-color: #28a745; color: #fff; }
+        #image-upload-btn { background-color: #6c757d; color: #fff; }
+    </style>
+</head>
+<body>
+    <div id="chat-container">
+        <div id="messages"></div>
+        <form id="form">
+            <input type="file" id="image-input" style="display:none;" accept="image/*">
+            <button type="button" id="image-upload-btn">🖼️</button>
+            <input id="input-message" autocomplete="off" placeholder="Ketik pesan..." />
+            <button id="send-btn">Kirim</button>
+        </form>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const messages = document.getElementById('messages');
+        const form = document.getElementById('form');
+        const input = document.getElementById('input-message');
+        const imageInput = document.getElementById('image-input');
+        const imageUploadBtn = document.getElementById('image-upload-btn');
+        let replyToId = null;
+
+        // Tampilkan pesan teks
+        socket.on('chat message', (msg) => {
+            addMessage(msg, 'received', 'text');
+        });
+
+        // Tampilkan pesan gambar
+        socket.on('image message', (data) => {
+            addMessage(data, 'received', 'image');
+        });
+
+        // Tampilkan pesan reply
+        socket.on('reply message', (data) => {
+            addMessage(data, 'received', 'reply');
+        });
+
+        // Kirim pesan teks
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (input.value) {
+                if (replyToId) {
+                    socket.emit('reply message', { replyTo: replyToId, message: input.value });
+                    replyToId = null; // Reset reply state
+                } else {
+                    socket.emit('chat message', input.value);
+                }
+                addMessage(input.value, 'sent', 'text'); // Tampilkan pesan yang dikirim sendiri
+                input.value = '';
+            }
+        });
+
+        // Kirim gambar
+        imageUploadBtn.addEventListener('click', () => {
+            imageInput.click();
+        });
+
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const base64data = event.target.result;
+                    socket.emit('image message', base64data);
+                    addMessage(base64data, 'sent', 'image'); // Tampilkan gambar yang diupload sendiri
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Fungsi untuk menambahkan pesan ke chat box
+        function addMessage(data, type, contentType) {
+            const item = document.createElement('div');
+            item.classList.add('message-item');
+            const bubble = document.createElement('div');
+            bubble.classList.add('message-bubble', type);
+
+            if (contentType === 'text') {
+                bubble.textContent = data;
+            } else if (contentType === 'image') {
+                const img = document.createElement('img');
+                img.src = data;
+                img.classList.add('chat-image');
+                bubble.appendChild(img);
+            } else if (contentType === 'reply') {
+                const replyTo = document.createElement('div');
+                replyTo.classList.add('reply-preview');
+                replyTo.textContent = `Membalas pesan: "${data.replyTo}"`;
+                bubble.appendChild(replyTo);
+                bubble.appendChild(document.createTextNode(data.message));
+            }
+            
+            item.appendChild(bubble);
+            messages.appendChild(item);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        // Contoh sederhana untuk fitur reply (membutuhkan implementasi backend lebih lanjut)
+        messages.addEventListener('click', (e) => {
+            if (e.target.classList.contains('message-bubble')) {
+                replyToId = e.target.textContent;
+                input.placeholder = `Membalas pesan: "${replyToId}"`;
+                input.focus();
+            }
+        });
+    </script>
+</body>
+  </html>
